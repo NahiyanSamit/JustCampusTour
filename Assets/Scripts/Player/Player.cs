@@ -8,7 +8,15 @@ namespace Player
 {
     public class Player : MonoBehaviour
     {
+        [Header("Player Settings")]
+        [SerializeField] private float moveSpeed;
+        [SerializeField] private GameObject playerHead;
+        [SerializeField] private float mouseSensitivity;
+
+        private float _pitch; // up/down
+        private float _yaw;   // left/right
         
+        // Player Input component
         private PlayerInput _playerInput;
         
         // Input Actions
@@ -33,8 +41,9 @@ namespace Player
             _interactAction.Enable();
             _lookAction.Enable();
             
-            _moveAction.started += Move;
+            _moveAction.performed += Move;
             _moveAction.canceled += CancelMove;
+            _lookAction.started += Look;
         }
 
         private void OnDisable()
@@ -43,8 +52,14 @@ namespace Player
             _interactAction.Disable();
             _lookAction.Disable();
             
-            _moveAction.started -= Move;
+            _moveAction.performed -= Move;
             _moveAction.canceled -= CancelMove;
+            _lookAction.started -= Look;
+        }
+        
+        private void Start()
+        {
+            Cursor.lockState = CursorLockMode.Locked;
         }
         
         
@@ -64,21 +79,27 @@ namespace Player
         
         private async UniTask MoveAsync(Vector2 direction, CancellationTokenSource cts)
         {
-            while (true)
+            while (!cts.Token.IsCancellationRequested)
             {
-                if (cts.Token.IsCancellationRequested)
-                {
-                    break;
-                }
-                
-                // Perform movement logic here
-                gameObject.transform.Translate(direction * Time.deltaTime);
-                
-                Debug.Log($"Moving in direction: {direction}");
-                
-                // Simulate some delay
-                await UniTask.Delay(100, cancellationToken: cts.Token);
+                Vector3 localDirection = new Vector3(direction.x, 0, direction.y).normalized;
+                Vector3 worldDirection = transform.TransformDirection(localDirection);
+                transform.position += worldDirection * (moveSpeed * Time.deltaTime);
+
+                await UniTask.Yield(cts.Token);
             }
+        }
+
+        
+        private void Look(InputAction.CallbackContext context)
+        {
+            Vector2 lookDelta = context.ReadValue<Vector2>() * mouseSensitivity;
+
+            _yaw += lookDelta.x;
+            _pitch -= lookDelta.y;
+            _pitch = Mathf.Clamp(_pitch, -80f, 80f); // clamp to prevent flipping
+
+            playerHead.transform.localRotation = Quaternion.Euler(_pitch, 0, 0);
+            gameObject.transform.localRotation = Quaternion.Euler(0, _yaw, 0);
         }
         
     }
